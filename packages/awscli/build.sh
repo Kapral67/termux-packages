@@ -1,3 +1,5 @@
+#shellcheck shell=bash
+# shellcheck disable=SC2034
 TERMUX_PKG_HOMEPAGE=https://aws.amazon.com/cli
 TERMUX_PKG_DESCRIPTION="A Unified Tool to Manage Your AWS Services"
 TERMUX_PKG_LICENSE="Apache-2.0"
@@ -6,20 +8,19 @@ TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM" # verified using gpg signatures instead
 
-TERMUX_PKG_BUILD_DEPENDS="python,python-ensurepip-wheels,python-pip"
+TERMUX_PKG_BUILD_DEPENDS="python"
 
 TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 --prefix=$TERMUX_PREFIX
 --with-install-type=portable-exe
---with-download-deps
 "
 
 TERMUX_PKG_AUTO_UPDATE=true
 
 _import_awscli_pgp_key() {
 
-# This key expired 2023-09-17 but it is still in use
-# Found at https://docs.aws.amazon.com/cli/latest/userguide/getting-started-source-install.html#source-getting-started-install-reqs
+    # This key expired 2023-09-17 but it is still in use
+    # Found at https://docs.aws.amazon.com/cli/latest/userguide/getting-started-source-install.html#source-getting-started-install-reqs
     cat <<EOF | gpg --import -
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 
@@ -60,7 +61,7 @@ termux_pkg_auto_update() {
     local version
 
     _import_awscli_pgp_key
-    
+
     tarball="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.tar.gz")"
     sig="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.sig")"
     wget -O "$tarball" https://awscli.amazonaws.com/awscli.tar.gz
@@ -90,7 +91,7 @@ termux_pkg_auto_update() {
 termux_step_get_source() {
     local tarball
     local sig
-    
+
     _import_awscli_pgp_key
 
     tarball="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.tar.gz")"
@@ -115,6 +116,27 @@ termux_step_get_source() {
 }
 
 termux_step_pre_configure() {
-#    termux_setup_rust
+    termux_setup_cmake
+    termux_setup_rust
     termux_setup_python_pip
+
+    pip install wheel cffi setuptools-rust
+    # pip install --prefer-binary \
+    #     'flit_core>=3.7.1,<3.9.1' \
+    #     'colorama>=0.2.5,<0.4.7' \
+    #     'docutils>=0.10,<0.20' \
+    #     'cryptography>=3.3.2,<40.0.2' \
+    #     'ruamel.yaml>=0.15.0,<=0.17.21' \
+    #     'ruamel.yaml.clib>=0.2.0,<=0.2.7' \
+    #     'prompt-toolkit>=3.0.24,<3.0.39' \
+    #     'distro>=1.5.0,<1.9.0' \
+    #     'awscrt>=0.19.18,<=0.19.19' \
+    #     'python-dateutil>=2.1,<3.0.0' \
+    #     'jmespath>=0.7.1,<1.1.0' \
+    #     'urllib3>=1.25.4,<1.27' \
+    #     'pyinstaller==5.12.0'
+
+    pip install --prefer-binary "$TERMUX_PKG_SRCDIR"
+
+    exit 1
 }
