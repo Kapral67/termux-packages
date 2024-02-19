@@ -9,13 +9,14 @@ TERMUX_PKG_MAINTAINER="@termux"
 TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM" # verified using gpg signatures instead
-TERMUX_PKG_DEPENDS="python"
+TERMUX_PKG_BUILD_DEPENDS="python, python-pip"
 TERMUX_PKG_SETUP_PYTHON=true
-TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools>=62.4, wheel, setuptools_rust"
+# TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools>=62.4, setuptools_rust, cffi, wheel"
 TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 --prefix=$TERMUX_PREFIX
 --with-install-type=portable-exe
+--with-download-deps
 "
 
 TERMUX_PKG_AUTO_UPDATE=true
@@ -119,29 +120,30 @@ termux_step_get_source() {
 }
 
 termux_step_pre_configure() {
+    # CFLAGS+=" -Wno-incompatible-function-pointer-types"
     # termux_setup_cmake
-    termux_setup_rust
+    # termux_setup_rust
     # termux_setup_python_pip
 
-    # pip install -I 'setuptools>=62.4'
-    # pip install setuptools-rust
-    # pip install wheel
-    # pip install --prefer-binary \
+    echo -e "\n$(python --version)\n"
+    python -m venv "$TERMUX_PKG_TMPDIR/awscli-venv"
+    echo -e "\n$(pip --version)\n"
+
+    # pip3 install \
     #     'flit_core>=3.7.1,<3.9.1' \
     #     'colorama>=0.2.5,<0.4.7' \
     #     'docutils>=0.10,<0.20' \
     #     'cryptography>=3.3.2,<40.0.2' \
     #     'ruamel.yaml>=0.15.0,<=0.17.21' \
-    #     'ruamel.yaml.clib>=0.2.0,<=0.2.7' \
     #     'prompt-toolkit>=3.0.24,<3.0.39' \
     #     'distro>=1.5.0,<1.9.0' \
     #     'awscrt>=0.19.18,<=0.19.19' \
     #     'python-dateutil>=2.1,<3.0.0' \
     #     'jmespath>=0.7.1,<1.1.0' \
     #     'urllib3>=1.25.4,<1.27' \
-    #     'pyinstaller==5.12.0'
+    #     'pyinstaller==5.12.0' # 'ruamel.yaml.clib>=0.2.0,<=0.2.7' \
 
-    pip install "$TERMUX_PKG_SRCDIR"
+    # pip install "$TERMUX_PKG_SRCDIR"
 
     exit 1
 }
