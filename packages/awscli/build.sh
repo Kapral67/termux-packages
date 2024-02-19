@@ -1,5 +1,7 @@
 #shellcheck shell=bash
 # shellcheck disable=SC2034
+# shellcheck disable=SC1091
+
 TERMUX_PKG_HOMEPAGE=https://aws.amazon.com/cli
 TERMUX_PKG_DESCRIPTION="A Unified Tool to Manage Your AWS Services"
 TERMUX_PKG_LICENSE="Apache-2.0"
@@ -7,9 +9,10 @@ TERMUX_PKG_MAINTAINER="@termux"
 TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM" # verified using gpg signatures instead
-
-TERMUX_PKG_BUILD_DEPENDS="python"
-
+TERMUX_PKG_DEPENDS="python"
+TERMUX_PKG_SETUP_PYTHON=true
+TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools>=62.4, wheel, setuptools_rust"
+TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
 --prefix=$TERMUX_PREFIX
 --with-install-type=portable-exe
@@ -116,11 +119,13 @@ termux_step_get_source() {
 }
 
 termux_step_pre_configure() {
-    termux_setup_cmake
+    # termux_setup_cmake
     termux_setup_rust
-    termux_setup_python_pip
+    # termux_setup_python_pip
 
-    pip install wheel cffi setuptools-rust
+    # pip install -I 'setuptools>=62.4'
+    # pip install setuptools-rust
+    # pip install wheel
     # pip install --prefer-binary \
     #     'flit_core>=3.7.1,<3.9.1' \
     #     'colorama>=0.2.5,<0.4.7' \
@@ -136,7 +141,7 @@ termux_step_pre_configure() {
     #     'urllib3>=1.25.4,<1.27' \
     #     'pyinstaller==5.12.0'
 
-    pip install --prefer-binary "$TERMUX_PKG_SRCDIR"
+    pip install "$TERMUX_PKG_SRCDIR"
 
     exit 1
 }
