@@ -8,12 +8,13 @@ TERMUX_PKG_MAINTAINER="@termux-user-repository"
 TERMUX_PKG_RECOMMENDS="man"
 TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
-TERMUX_PKG_SHA256="SKIP_CHECKSUM" # verified using gpg signatures instead
+TERMUX_PKG_SHA256="SKIP_CHECKSUM"
 TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_BUILD_IN_SRC=true
-TERMUX_PKG_BUILD_DEPENDS="ldd, python"
+TERMUX_PKG_BUILD_DEPENDS="ldd, python-pip"
 TERMUX_PKG_SETUP_PYTHON=true
+TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools-rust"
 
 _import_awscli_pgp_key() {
     # This key expired 2023-09-17 but it is still in use
@@ -102,18 +103,24 @@ termux_step_get_source() {
     mkdir -p "$TERMUX_PKG_SRCDIR"
     tar --strip-components=1 -xf "$tarball" -C "$TERMUX_PKG_SRCDIR"
     rm -f "$tarball"
-    sed -i '/ruamel.yaml.clib/d' "$TERMUX_PKG_SRCDIR/pyproject.toml" # Unneeded dependency since we have python>=3.10
+    # Unneeded dependency since we have python>=3.10
+    sed -i '/ruamel.yaml.clib/d' "$TERMUX_PKG_SRCDIR/pyproject.toml"
     sed -i 's/self._utils.create_venv(self._venv_dir, with_pip=True)/self._utils.create_venv(self._venv_dir, with_pip=False)/g' "$TERMUX_PKG_SRCDIR/backends/build_system/awscli_venv.py"
 }
 
 termux_step_pre_configure() {
     termux_setup_rust
     termux_setup_cmake
+    cd "$TERMUX_PKG_SRCDIR" || exit 1
+    pip3 install -r requirements/download-deps/bootstrap.txt
+    pip3 install -r requirements/portable-exe-extras.txt
+    pip3 install .
 }
 
 termux_step_configure() {
-    cd "$TERMUX_PKG_SRCDIR" || exit 1
-    ./configure --prefix="$TERMUX_PREFIX" --with-install-type=portable-exe --with-download-deps
+    # cannot use `--with-download-deps` here because it creates a venv but we want to use
+    # crossenv provided by `termux_setup_python_pip` via `TERMUX_PKG_SETUP_PYTHON=true`
+    ./configure --prefix="$TERMUX_PREFIX" --with-install-type=portable-exe
 }
 
 termux_step_make() {
