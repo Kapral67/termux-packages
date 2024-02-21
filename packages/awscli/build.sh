@@ -1,28 +1,21 @@
-#shellcheck shell=bash
+# shellcheck shell=bash
 # shellcheck disable=SC2034
-# shellcheck disable=SC1091
 
-TERMUX_PKG_HOMEPAGE=https://aws.amazon.com/cli
+TERMUX_PKG_HOMEPAGE="https://aws.amazon.com/cli"
 TERMUX_PKG_DESCRIPTION="A Unified Tool to Manage Your AWS Services"
 TERMUX_PKG_LICENSE="Apache-2.0"
-TERMUX_PKG_MAINTAINER="@termux"
+TERMUX_PKG_MAINTAINER="@termux-user-repository"
+TERMUX_PKG_RECOMMENDS="man"
 TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM" # verified using gpg signatures instead
-TERMUX_PKG_BUILD_DEPENDS="python, python-pip"
-TERMUX_PKG_SETUP_PYTHON=true
-# TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools>=62.4, setuptools_rust, cffi, wheel"
-TERMUX_PKG_BUILD_IN_SRC=true
-TERMUX_PKG_EXTRA_CONFIGURE_ARGS="
---prefix=$TERMUX_PREFIX
---with-install-type=portable-exe
---with-download-deps
-"
-
+TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_AUTO_UPDATE=true
+TERMUX_PKG_BUILD_IN_SRC=true
+TERMUX_PKG_BUILD_DEPENDS="ldd, python"
+TERMUX_PKG_SETUP_PYTHON=true
 
 _import_awscli_pgp_key() {
-
     # This key expired 2023-09-17 but it is still in use
     # Found at https://docs.aws.amazon.com/cli/latest/userguide/getting-started-source-install.html#source-getting-started-install-reqs
     cat <<EOF | gpg --import -
@@ -56,20 +49,24 @@ YLZATHZKTJyiqA==
 =vYOk
 -----END PGP PUBLIC KEY BLOCK-----
 EOF
-
 }
 
-termux_pkg_auto_update() {
+_get_awscli_src_tarball() {
     local tarball
     local sig
-    local version
 
     _import_awscli_pgp_key
 
     tarball="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.tar.gz")"
     sig="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.sig")"
-    wget -O "$tarball" https://awscli.amazonaws.com/awscli.tar.gz
-    wget -O "$sig" https://awscli.amazonaws.com/awscli.tar.gz.sig
+
+    if [[ "$*" =~ "--latest" ]]; then
+        curl -Lo "$tarball" https://awscli.amazonaws.com/awscli.tar.gz
+        curl -Lo "$sig" https://awscli.amazonaws.com/awscli.tar.gz.sig
+    else
+        curl -Lo "$tarball" "$TERMUX_PKG_SRCURL"
+        curl -Lo "$sig" "${TERMUX_PKG_SRCURL}.sig"
+    fi
 
     if ! gpg --verify "$sig" "$tarball"; then
         rm -f "$sig"
@@ -79,8 +76,15 @@ termux_pkg_auto_update() {
 
     rm -f "$sig"
 
-    version="$(tar tzf "$tarball" | head -n 1 | grep -oP "\d+\.\d+\.\d+")"
+    echo "$tarball"
+}
 
+termux_pkg_auto_update() {
+    local tarball
+    local version
+
+    tarball="$(_get_awscli_src_tarball --latest)"
+    version="$(tar tzf "$tarball" | head -n 1 | grep -oP "\d+\.\d+\.\d+")"
     rm -f "$tarball"
 
     if [ -z "$version" ]; then
@@ -94,56 +98,28 @@ termux_pkg_auto_update() {
 
 termux_step_get_source() {
     local tarball
-    local sig
-
-    _import_awscli_pgp_key
-
-    tarball="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.tar.gz")"
-    sig="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.sig")"
-
-    wget -O "$tarball" "$TERMUX_PKG_SRCURL"
-    wget -O "$sig" "$TERMUX_PKG_SRCURL.sig"
-
-    if ! gpg --verify "$sig" "$tarball"; then
-        rm -f "$sig"
-        rm -f "$tarball"
-        termux_error_exit "Error: failed to validate upstream source code"
-    fi
-
-    rm -f "$sig"
-
+    tarball="$(_get_awscli_src_tarball)"
     mkdir -p "$TERMUX_PKG_SRCDIR"
-
     tar --strip-components=1 -xf "$tarball" -C "$TERMUX_PKG_SRCDIR"
-
     rm -f "$tarball"
+    sed -i '/ruamel.yaml.clib/d' "$TERMUX_PKG_SRCDIR/pyproject.toml" # Unneeded dependency since we have python>=3.10
+    sed -i 's/self._utils.create_venv(self._venv_dir, with_pip=True)/self._utils.create_venv(self._venv_dir, with_pip=False)/g' "$TERMUX_PKG_SRCDIR/backends/build_system/awscli_venv.py"
 }
 
 termux_step_pre_configure() {
-    # CFLAGS+=" -Wno-incompatible-function-pointer-types"
-    # termux_setup_cmake
-    # termux_setup_rust
-    # termux_setup_python_pip
+    termux_setup_rust
+    termux_setup_cmake
+}
 
-    echo -e "\n$(python --version)\n"
-    python -m venv "$TERMUX_PKG_TMPDIR/awscli-venv"
-    echo -e "\n$(pip --version)\n"
+termux_step_configure() {
+    cd "$TERMUX_PKG_SRCDIR" || exit 1
+    ./configure --prefix="$TERMUX_PREFIX" --with-install-type=portable-exe --with-download-deps
+}
 
-    # pip3 install \
-    #     'flit_core>=3.7.1,<3.9.1' \
-    #     'colorama>=0.2.5,<0.4.7' \
-    #     'docutils>=0.10,<0.20' \
-    #     'cryptography>=3.3.2,<40.0.2' \
-    #     'ruamel.yaml>=0.15.0,<=0.17.21' \
-    #     'prompt-toolkit>=3.0.24,<3.0.39' \
-    #     'distro>=1.5.0,<1.9.0' \
-    #     'awscrt>=0.19.18,<=0.19.19' \
-    #     'python-dateutil>=2.1,<3.0.0' \
-    #     'jmespath>=0.7.1,<1.1.0' \
-    #     'urllib3>=1.25.4,<1.27' \
-    #     'pyinstaller==5.12.0' # 'ruamel.yaml.clib>=0.2.0,<=0.2.7' \
+termux_step_make() {
+    make
+}
 
-    # pip install "$TERMUX_PKG_SRCDIR"
-
-    exit 1
+termux_step_make_install() {
+    make install
 }
