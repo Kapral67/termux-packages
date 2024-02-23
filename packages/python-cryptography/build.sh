@@ -3,9 +3,9 @@ TERMUX_PKG_DESCRIPTION="Provides cryptographic recipes and primitives to Python 
 TERMUX_PKG_LICENSE="Apache-2.0, BSD 3-Clause"
 TERMUX_PKG_LICENSE_FILE="LICENSE, LICENSE.APACHE, LICENSE.BSD"
 TERMUX_PKG_MAINTAINER="@termux"
-TERMUX_PKG_VERSION="42.0.3"
+TERMUX_PKG_VERSION="40.0.1"
 TERMUX_PKG_SRCURL=https://github.com/pyca/cryptography/archive/refs/tags/${TERMUX_PKG_VERSION}.tar.gz
-TERMUX_PKG_SHA256=bfa4d17329076fecf3971f1ef6b50c097a1ccd249a06bbcfccd9975ddcd2cf7f
+TERMUX_PKG_SHA256="SKIP_CHECKSUM"
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_DEPENDS="openssl, python, python-pip"
 TERMUX_PKG_BUILD_IN_SRC=true
@@ -14,15 +14,18 @@ TERMUX_PKG_PYTHON_COMMON_DEPS="wheel, cffi, setuptools-rust"
 TERMUX_PKG_PYTHON_TARGET_DEPS="'cffi>=1.12'"
 
 termux_step_configure() {
+	echo -e "\nBEGIN termux_step_configure\n"
 	termux_setup_rust
 	export CARGO_BUILD_TARGET=${CARGO_TARGET_NAME}
 	export PYO3_CROSS_LIB_DIR=$TERMUX_PREFIX/lib
+	echo -e "\nEND termux_step_configure\n"
 }
 
 termux_step_create_debscripts() {
-	cat <<- EOF > ./postinst
-	#!$TERMUX_PREFIX/bin/sh
-	echo "Installing dependencies through pip..."
-	pip3 install $TERMUX_PKG_PYTHON_TARGET_DEPS
+	echo -e "\ntermux_step_create_debscripts\n"
+	cat <<-EOF >./postinst
+		#!$TERMUX_PREFIX/bin/sh
+		echo "Installing dependencies through pip..."
+		pip3 install $TERMUX_PKG_PYTHON_TARGET_DEPS
 	EOF
 }
