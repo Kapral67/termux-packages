@@ -1,19 +1,17 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034
-
-TERMUX_PKG_HOMEPAGE=https://aws.amazon.com/cli
+TERMUX_PKG_HOMEPAGE="https://aws.amazon.com/cli"
 TERMUX_PKG_DESCRIPTION="A Unified Tool to Manage Your AWS Services"
 TERMUX_PKG_LICENSE="Apache-2.0"
 TERMUX_PKG_MAINTAINER="@termux-user-repository"
-TERMUX_PKG_RECOMMENDS="man"
 TERMUX_PKG_VERSION="2.15.22"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM"
 TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_BUILD_IN_SRC=true
-TERMUX_PKG_BUILD_DEPENDS="ldd, python-pip"
-TERMUX_PKG_SETUP_PYTHON=true
+TERMUX_PKG_DEPENDS="openssl, man"
+TERMUX_PKG_BUILD_DEPENDS="ldd"
 TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools-rust, cffi"
 
 _import_awscli_pgp_key() {
@@ -58,26 +56,26 @@ _get_awscli_src_tarball() {
 
 	_import_awscli_pgp_key
 
-	tarball="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.tar.gz")"
-	sig="$(mktemp -p "$TERMUX_PKG_TMPDIR" "awscli.XXXXXX.sig")"
+	tarball="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "awscli.XXXXXX.tar.gz")"
+	sig="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "awscli.XXXXXX.sig")"
 
-	if [[ "$*" =~ "--latest" ]]; then
-		curl -Lo "$tarball" https://awscli.amazonaws.com/awscli.tar.gz
-		curl -Lo "$sig" https://awscli.amazonaws.com/awscli.tar.gz.sig
+	if [[ "${*}" =~ "--latest" ]]; then
+		curl -Lo "${tarball}" https://awscli.amazonaws.com/awscli.tar.gz
+		curl -Lo "${sig}" https://awscli.amazonaws.com/awscli.tar.gz.sig
 	else
-		curl -Lo "$tarball" "$TERMUX_PKG_SRCURL"
-		curl -Lo "$sig" "${TERMUX_PKG_SRCURL}.sig"
+		curl -Lo "${tarball}" "${TERMUX_PKG_SRCURL}"
+		curl -Lo "${sig}" "${TERMUX_PKG_SRCURL}.sig"
 	fi
 
-	if ! gpg --verify "$sig" "$tarball"; then
-		rm -f "$sig"
-		rm -f "$tarball"
+	if ! gpg --verify "${sig}" "${tarball}"; then
+		rm -f "${sig}"
+		rm -f "${tarball}"
 		termux_error_exit "Error: failed to validate upstream source code"
 	fi
 
-	rm -f "$sig"
+	rm -f "${sig}"
 
-	echo "$tarball"
+	echo "${tarball}"
 }
 
 termux_pkg_auto_update() {
@@ -85,63 +83,62 @@ termux_pkg_auto_update() {
 	local version
 
 	tarball="$(_get_awscli_src_tarball --latest)"
-	version="$(tar tzf "$tarball" | head -n 1 | grep -oP "\d+\.\d+\.\d+")"
-	rm -f "$tarball"
+	version="$(tar tzf "${tarball}" | head -n 1 | grep -oP "\d+\.\d+\.\d+")"
+	rm -f "${tarball}"
 
-	if [ -z "$version" ]; then
+	if [ -z "${version}" ]; then
 		termux_error_exit "Error: failed to extract latest version"
 	fi
 
-	if [ "$TERMUX_PKG_VERSION" != "$version" ]; then
-		termux_pkg_upgrade_version "$version" --skip-version-check
+	if [ "${TERMUX_PKG_VERSION}" != "${version}" ]; then
+		termux_pkg_upgrade_version "${version}" --skip-version-check
 	fi
 }
 
 termux_step_get_source() {
 	local tarball
 	tarball="$(_get_awscli_src_tarball)"
-	mkdir -p "$TERMUX_PKG_SRCDIR"
-	tar --strip-components=1 -xf "$tarball" -C "$TERMUX_PKG_SRCDIR"
-	rm -f "$tarball"
+	mkdir -p "${TERMUX_PKG_SRCDIR}"
+	tar --strip-components=1 -xf "${tarball}" -C "${TERMUX_PKG_SRCDIR}"
+	rm -f "${tarball}"
 	# Unneeded dependency since we have python>=3.10
-	sed -i '/ruamel.yaml.clib/d' "$TERMUX_PKG_SRCDIR/pyproject.toml"
-	sed -i 's/self._utils.create_venv(self._venv_dir, with_pip=True)/self._utils.create_venv(self._venv_dir, with_pip=False)/g' "$TERMUX_PKG_SRCDIR/backends/build_system/awscli_venv.py"
+	sed -i '/ruamel.yaml.clib/d' "${TERMUX_PKG_SRCDIR}/pyproject.toml"
+	sed -i 's/self._utils.create_venv(self._venv_dir, with_pip=True)/self._utils.create_venv(self._venv_dir, with_pip=False)/g' "${TERMUX_PKG_SRCDIR}/backends/build_system/awscli_venv.py"
 }
 
 # _build_awscrt_python() {
 # 	local srcdir
 # 	local toolchain_file
 
-# 	srcdir="$(mktemp -d -p "$TERMUX_PKG_TMPDIR")"
-# 	cd "$srcdir" || exit 1
+# 	srcdir="$(mktemp -d -p "${TERMUX_PKG_TMPDIR}")"
+# 	cd "${srcdir}" || exit 1
 # 	wget "https://files.pythonhosted.org/packages/69/25/b1c6d1c3aeed90cb6ce69a6c5136caeb7f43f8d81a87f626d6a21b082afc/awscrt-0.19.19.tar.gz"
 # 	tar --strip-components=1 -xf "awscrt-0.19.19.tar.gz"
 
 # 	termux_setup_cmake
-# 	toolchain_file="$(mktemp -p "$TERMUX_PKG_TMPDIR" "aws-crt-python.XXXXXX.cmake")"
-# 	cat <<-EOF >"$toolchain_file"
+# 	toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
+# 	cat <<-EOF >"${toolchain_file}"
 # 		set(CMAKE_SYSTEM_NAME "Android")
 # 		set(CMAKE_SYSTEM_PROCESSOR "${TERMUX_ARCH}")
 # 		set(CMAKE_ANDROID_NDK "${NDK}")
 # 	EOF
 
-# 	CMAKE_TOOLCHAIN_FILE="$toolchain_file" pip3 install --no-binary :all: --verbose .
-# 	rm -f "$toolchain_file"
-# 	rm -rf "$srcdir"
+# 	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" pip3 install --no-binary :all: --verbose .
+# 	rm -f "${toolchain_file}"
+# 	rm -rf "${srcdir}"
 # }
 
 termux_step_pre_configure() {
 	# local toolchain_file
 	# _build_awscrt_python
 
-	cd "$TERMUX_PKG_SRCDIR" || exit 1
 	# cross-pip3 install -r requirements/download-deps/bootstrap.txt
 	# cross-pip3 install -r requirements/portable-exe-extras.txt
 
 	termux_setup_rust
 	# termux_setup_cmake
-	# toolchain_file="$(mktemp -p "$TERMUX_PKG_TMPDIR" "aws-crt-python.XXXXXX.cmake")"
-	# cat <<-EOF >"$toolchain_file"
+	# toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
+	# cat <<-EOF >"${toolchain_file}"
 	# 	set(CMAKE_SYSTEM_NAME "Android")
 	# 	set(CMAKE_SYSTEM_PROCESSOR "${TERMUX_ARCH}")
 	# 	set(CMAKE_ANDROID_NDK "${NDK}")
@@ -154,17 +151,17 @@ termux_step_pre_configure() {
 		CARGO_BUILD_TARGET="${CARGO_TARGET_NAME}" \
 		cross-pip3 install --verbose --verbose --verbose \
 		cryptography==40.0.1
-	# CMAKE_TOOLCHAIN_FILE="$toolchain_file" \
+	# CMAKE_TOOLCHAIN_FILE="${toolchain_file}" \
 	# 	cross-pip3 --verbose --verbose --verbose \
 	# 	install --no-binary :all: awscrt==0.19.19
-	# rm -f "$toolchain_file"
+	# rm -f "${toolchain_file}"
 }
 
 termux_step_configure() {
 	echo -e '\nBEGIN termux_step_configure\n'
 	# cannot use `--with-download-deps` here because it creates a venv but we want to use
 	# crossenv provided by `termux_setup_python_pip` via `TERMUX_PKG_SETUP_PYTHON=true`
-	./configure --prefix="$TERMUX_PREFIX" --with-install-type=portable-exe
+	./configure --prefix="${TERMUX_PREFIX}" --with-install-type=portable-exe
 }
 
 termux_step_make() {
