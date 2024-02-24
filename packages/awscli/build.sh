@@ -159,6 +159,11 @@ _build_awscrt() {
 		set(CMAKE_USE_SYSTEM_LIBRARIES ON)
 	EOF
 
+	if ! ${TERMUX_ON_DEVICE_BUILD}; then
+		CMAKE_TOOLCHAIN_FILE="${toolchain_file}" AWS_CRT_BUILD_USE_SYSTEM_LIBCRYPTO=1 \
+			build-pip3 install "awscrt==${*}"
+	fi
+
 	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" AWS_CRT_BUILD_USE_SYSTEM_LIBCRYPTO=1 \
 		pip3 install --no-binary :all: "awscrt==${*}"
 
@@ -167,6 +172,11 @@ _build_awscrt() {
 
 _build_cryptography() {
 	termux_setup_rust
+
+	if ! ${TERMUX_ON_DEVICE_BUILD}; then
+		PYO3_CROSS_LIB_DIR="${TERMUX_PREFIX}/lib" CARGO_BUILD_TARGET="${CARGO_TARGET_NAME}" \
+			build-pip3 install "cryptography==${*}"
+	fi
 
 	PYO3_CROSS_LIB_DIR="${TERMUX_PREFIX}/lib" CARGO_BUILD_TARGET="${CARGO_TARGET_NAME}" \
 		pip3 install "cryptography==${*}"
@@ -209,6 +219,7 @@ termux_step_configure() {
 }
 
 termux_step_make() {
+	python3 -c "import site; print('\n'.join(site.getsitepackages()))" | xargs -n 1 mkdir -p
 	make
 }
 
