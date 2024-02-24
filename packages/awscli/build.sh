@@ -11,8 +11,8 @@ TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_DEPENDS="openssl, man"
-TERMUX_PKG_BUILD_DEPENDS="ldd"
-TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools-rust, cffi"
+TERMUX_PKG_BUILD_DEPENDS="ldd, python-pip"
+TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools-rust"
 
 _import_awscli_pgp_key() {
 	# This key expired 2023-09-17 but it is still in use
@@ -103,69 +103,112 @@ termux_step_get_source() {
 	rm -f "${tarball}"
 	# Unneeded dependency since we have python>=3.10
 	sed -i '/ruamel.yaml.clib/d' "${TERMUX_PKG_SRCDIR}/pyproject.toml"
+	# TODO: Confirm this is still needed
 	sed -i 's/self._utils.create_venv(self._venv_dir, with_pip=True)/self._utils.create_venv(self._venv_dir, with_pip=False)/g' "${TERMUX_PKG_SRCDIR}/backends/build_system/awscli_venv.py"
 }
 
-# _build_awscrt_python() {
-# 	local srcdir
-# 	local toolchain_file
+_build_awscrt() {
+	local toolchain_file
+	local sys_proc
+	local build_type
 
-# 	srcdir="$(mktemp -d -p "${TERMUX_PKG_TMPDIR}")"
-# 	cd "${srcdir}" || exit 1
-# 	wget "https://files.pythonhosted.org/packages/69/25/b1c6d1c3aeed90cb6ce69a6c5136caeb7f43f8d81a87f626d6a21b082afc/awscrt-0.19.19.tar.gz"
-# 	tar --strip-components=1 -xf "awscrt-0.19.19.tar.gz"
+	termux_setup_cmake
 
-# 	termux_setup_cmake
-# 	toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
-# 	cat <<-EOF >"${toolchain_file}"
-# 		set(CMAKE_SYSTEM_NAME "Android")
-# 		set(CMAKE_SYSTEM_PROCESSOR "${TERMUX_ARCH}")
-# 		set(CMAKE_ANDROID_NDK "${NDK}")
-# 	EOF
+	if ${TERMUX_ON_DEVICE_BUILD}; then
+		build_type="Debug"
+	else
+		build_type="Release"
+	fi
 
-# 	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" pip3 install --no-binary :all: --verbose .
-# 	rm -f "${toolchain_file}"
-# 	rm -rf "${srcdir}"
-# }
+	toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
+	if ${TERMUX_ON_DEVICE_BUILD}; then
+		cat <<-EOF >"${toolchain_file}"
+			set(CMAKE_LINKER "$(command -v ${LD}) ${LDFLAGS}")
+		EOF
+	else
+		CXXFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
+		CFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
+		LDFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
+
+		sys_proc="${TERMUX_ARCH}"
+		if [ "${sys_proc}" = "arm" ]; then
+			sys_proc="armv7-a"
+		fi
+
+		cat <<-EOF >"${toolchain_file}"
+			set(CMAKE_CROSSCOMPILING ON)
+			set(CMAKE_LINKER "${TERMUX_STANDALONE_TOOLCHAIN}/bin/${LD} ${LDFLAGS}")
+			set(CMAKE_SYSTEM_NAME "Android")
+			set(CMAKE_SYSTEM_VERSION "${TERMUX_PKG_API_LEVEL}")
+			set(CMAKE_SYSTEM_PROCESSOR "${TERMUX_ARCH}")
+			set(CMAKE_ANDROID_STANDALONE_TOOLCHAIN "${TERMUX_STANDALONE_TOOLCHAIN}")
+			set(CMAKE_ANDROID_NDK "${NDK}")
+		EOF
+	fi
+
+	cat <<-EOF >>"${toolchain_file}"
+		set(CMAKE_BUILD_TYPE "${build_type}")
+		set(CMAKE_C_FLAGS "${CFLAGS} ${CPPFLAGS}")
+		set(CMAKE_CXX_FLAGS "${CXXFLAGS} ${CPPFLAGS}")
+		set(CMAKE_FIND_ROOT_PATH "${TERMUX_PREFIX}")
+		set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+		set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE NEVER)
+		set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY NEVER)
+		set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE NEVER)
+		set(CMAKE_PREFIX_PATH "${TERMUX_PREFIX}")
+		set(CMAKE_USE_SYSTEM_LIBRARIES ON)
+	EOF
+
+	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" AWS_CRT_BUILD_USE_SYSTEM_LIBCRYPTO=1 \
+		pip3 install --no-binary :all: "awscrt==${*}"
+
+	rm -f "${toolchain_file}"
+}
+
+_build_cryptography() {
+	termux_setup_rust
+
+	PYO3_CROSS_LIB_DIR="${TERMUX_PREFIX}/lib" CARGO_BUILD_TARGET="${CARGO_TARGET_NAME}" \
+		pip3 install "cryptography==${*}"
+}
 
 termux_step_pre_configure() {
-	# local toolchain_file
-	# _build_awscrt_python
+	local requirements
+	local awscrt_version
+	local cryptography_version
 
-	# cross-pip3 install -r requirements/download-deps/bootstrap.txt
-	# cross-pip3 install -r requirements/portable-exe-extras.txt
+	if ${TERMUX_ON_DEVICE_BUILD}; then
+		pip3 install pip-tools
+	else
+		build-pip3 install pip-tools
+	fi
 
-	termux_setup_rust
-	# termux_setup_cmake
-	# toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
-	# cat <<-EOF >"${toolchain_file}"
-	# 	set(CMAKE_SYSTEM_NAME "Android")
-	# 	set(CMAKE_SYSTEM_PROCESSOR "${TERMUX_ARCH}")
-	# 	set(CMAKE_ANDROID_NDK "${NDK}")
-	# EOF
-	# build-pip3 install --verbose 'awscrt==0.19.19'
-	echo -e '\nBUILD PIP CRYPTOGRAPHY\n'
-	build-pip3 install --verbose --verbose --verbose 'cryptography==40.0.1'
-	echo -e '\nCROSS PIP CRYPTOGRAPHY\n'
-	PYO3_CROSS_LIB_DIR="${TERMUX_PREFIX}/lib" \
-		CARGO_BUILD_TARGET="${CARGO_TARGET_NAME}" \
-		cross-pip3 install --verbose --verbose --verbose \
-		cryptography==40.0.1
-	# CMAKE_TOOLCHAIN_FILE="${toolchain_file}" \
-	# 	cross-pip3 --verbose --verbose --verbose \
-	# 	install --no-binary :all: awscrt==0.19.19
-	# rm -f "${toolchain_file}"
+	requirements="$(mktemp -p "${TERMUX_PKG_SRCDIR}" "awscli-requirements.XXXXXX.txt")"
+	pip-compile --strip-extras --allow-unsafe --no-annotate -qo "${requirements}" \
+		requirements/download-deps/bootstrap.txt requirements/portable-exe-extras.txt pyproject.toml
+
+	awscrt_version="$(grep -oP 'awscrt==\K\d+[.\d+]*' "${requirements}")"
+	sed -i '/awscrt/d' "${requirements}"
+
+	cryptography_version="$(grep -oP 'cryptography==\K\d+[.\d+]*' "${requirements}")"
+	sed -i '/cryptography/d' "${requirements}"
+
+	pip3 install -r "${requirements}"
+	if ! ${TERMUX_ON_DEVICE_BUILD}; then
+		build-pip3 install -r "${requirements}"
+	fi
+
+	_build_awscrt "${awscrt_version}"
+	_build_cryptography "${cryptography_version}"
 }
 
 termux_step_configure() {
-	echo -e '\nBEGIN termux_step_configure\n'
 	# cannot use `--with-download-deps` here because it creates a venv but we want to use
 	# crossenv provided by `termux_setup_python_pip` via `TERMUX_PKG_SETUP_PYTHON=true`
 	./configure --prefix="${TERMUX_PREFIX}" --with-install-type=portable-exe
 }
 
 termux_step_make() {
-	termux_error_exit "REACHED MAKE"
 	make
 }
 

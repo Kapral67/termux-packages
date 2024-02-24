@@ -25,14 +25,18 @@ termux_step_make_install() {
 	local sys_proc
 	local build_type
 
-	if [ "${TERMUX_DEBUG_BUILD}" = "true" ]; then
+	if ${TERMUX_ON_DEVICE_BUILD}; then
 		build_type="Debug"
 	else
 		build_type="Release"
 	fi
 
 	toolchain_file="$(mktemp -p "${TERMUX_PKG_TMPDIR}" "aws-crt-python.XXXXXX.cmake")"
-	if [ "${TERMUX_ON_DEVICE_BUILD}" = "false" ]; then
+	if ${TERMUX_ON_DEVICE_BUILD}; then
+		cat <<-EOF >"${toolchain_file}"
+			set(CMAKE_LINKER "$(command -v ${LD}) ${LDFLAGS}")
+		EOF
+	else
 		CXXFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
 		CFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
 		LDFLAGS+=" --target=${CCTERMUX_HOST_PLATFORM}"
@@ -51,10 +55,6 @@ termux_step_make_install() {
 			set(CMAKE_ANDROID_STANDALONE_TOOLCHAIN "${TERMUX_STANDALONE_TOOLCHAIN}")
 			set(CMAKE_ANDROID_NDK "${NDK}")
 		EOF
-	else
-		cat <<-EOF >"${toolchain_file}"
-			set(CMAKE_LINKER "$(command -v ${LD}) ${LDFLAGS}")
-		EOF
 	fi
 
 	cat <<-EOF >>"${toolchain_file}"
@@ -72,9 +72,11 @@ termux_step_make_install() {
 		set(CMAKE_USE_SYSTEM_LIBRARIES ON)
 	EOF
 
-	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" AWS_CRT_BUILD_USE_SYSTEM_LIBCRYPTO=1 pip3 install --no-binary :all: "${TERMUX_PKG_SRCDIR}" --prefix "${TERMUX_PREFIX}" || {
-		rm -f "${toolchain_file}"
-		termux_error_exit "Failed to install ${TERMUX_PKG_NAME}"
-	}
+	CMAKE_TOOLCHAIN_FILE="${toolchain_file}" AWS_CRT_BUILD_USE_SYSTEM_LIBCRYPTO=1 \
+		pip3 install --no-binary :all: "${TERMUX_PKG_SRCDIR}" --prefix "${TERMUX_PREFIX}" ||
+		{
+			rm -f "${toolchain_file}"
+			termux_error_exit "Failed to install ${TERMUX_PKG_NAME}"
+		}
 	rm -f "${toolchain_file}"
 }
