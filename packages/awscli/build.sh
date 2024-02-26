@@ -3,14 +3,14 @@
 TERMUX_PKG_HOMEPAGE="https://aws.amazon.com/cli"
 TERMUX_PKG_DESCRIPTION="A Unified Tool to Manage Your AWS Services"
 TERMUX_PKG_LICENSE="Apache-2.0"
-TERMUX_PKG_MAINTAINER="@termux-user-repository"
-TERMUX_PKG_VERSION="2.15.22"
+TERMUX_PKG_MAINTAINER="@termux"
+TERMUX_PKG_VERSION="2.15.21"
 TERMUX_PKG_SRCURL="https://awscli.amazonaws.com/awscli-${TERMUX_PKG_VERSION}.tar.gz"
 TERMUX_PKG_SHA256="SKIP_CHECKSUM"
 TERMUX_PKG_SKIP_SRC_EXTRACT=true
 TERMUX_PKG_AUTO_UPDATE=true
 TERMUX_PKG_BUILD_IN_SRC=true
-TERMUX_PKG_DEPENDS="openssl, man"
+TERMUX_PKG_DEPENDS="man, openssl, python"
 TERMUX_PKG_BUILD_DEPENDS="ldd, python-pip"
 TERMUX_PKG_PYTHON_COMMON_DEPS="setuptools-rust"
 
@@ -195,7 +195,7 @@ termux_step_pre_configure() {
 
 	requirements="$(mktemp -p "${TERMUX_PKG_SRCDIR}" "awscli-requirements.XXXXXX.txt")"
 	pip-compile --strip-extras --allow-unsafe --no-annotate -qo "${requirements}" \
-		requirements/download-deps/bootstrap.txt requirements/portable-exe-extras.txt pyproject.toml
+		requirements/download-deps/bootstrap.txt pyproject.toml
 
 	awscrt_version="$(grep -oP 'awscrt==\K\d+[.\d+]*' "${requirements}")"
 	sed -i '/awscrt/d' "${requirements}"
@@ -214,8 +214,9 @@ termux_step_pre_configure() {
 
 termux_step_configure() {
 	# cannot use `--with-download-deps` here because it creates a venv but we want to use
-	# crossenv provided by `termux_setup_python_pip` via `TERMUX_PKG_SETUP_PYTHON=true`
-	./configure --prefix="${TERMUX_PREFIX}" --with-install-type=portable-exe
+	# venv provided by `termux_setup_python_pip` via `TERMUX_PKG_SETUP_PYTHON=true`
+	# (implied by setting `TERMUX_PKG_PYTHON_COMMON_DEPS`)
+	./configure --prefix="${TERMUX_PREFIX}"
 }
 
 termux_step_make() {
@@ -225,4 +226,9 @@ termux_step_make() {
 
 termux_step_make_install() {
 	make install
+}
+
+termux_step_post_make_install() {
+	# Remove unneeded files
+	rm -rf "${TERMUX_PREFIX}/share"
 }
