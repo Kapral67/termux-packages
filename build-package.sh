@@ -1,6 +1,6 @@
 #!/bin/bash
 # shellcheck disable=SC1117
-
+set -x
 # Setting the TMPDIR variable
 : "${TMPDIR:=/tmp}"
 export TMPDIR
@@ -10,12 +10,12 @@ export TMPDIR
 # that have been compiled at any instant by recursive calls to build-package.sh
 if [[ ! "$TERMUX_BUILD_PACKAGE_CALL_DEPTH" =~ ^[0-9]+$ ]]; then
 	export TERMUX_BUILD_PACKAGE_CALL_DEPTH=0
-	export TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH="${TMPDIR}/build-package-call-built-packages-list-$(date +"%Y-%m-%d-%H.%M.%S.")$((RANDOM%1000))"
-	export TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH="${TMPDIR}/build-package-call-building-packages-list-$(date +"%Y-%m-%d-%H.%M.%S.")$((RANDOM%1000))"
-	echo -n " " > "$TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH"
+	export TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH="${TMPDIR}/build-package-call-built-packages-list-$(date +"%Y-%m-%d-%H.%M.%S.")$((RANDOM % 1000))"
+	export TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH="${TMPDIR}/build-package-call-building-packages-list-$(date +"%Y-%m-%d-%H.%M.%S.")$((RANDOM % 1000))"
+	echo -n " " >"$TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH"
 	touch "$TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH"
 else
-	export TERMUX_BUILD_PACKAGE_CALL_DEPTH=$((TERMUX_BUILD_PACKAGE_CALL_DEPTH+1))
+	export TERMUX_BUILD_PACKAGE_CALL_DEPTH=$((TERMUX_BUILD_PACKAGE_CALL_DEPTH + 1))
 fi
 
 set -e -o pipefail -u
@@ -25,7 +25,8 @@ TERMUX_SCRIPTDIR=$(pwd)
 export TERMUX_SCRIPTDIR
 
 # Store pid of current process in a file for docker__run_docker_exec_trap
-source "$TERMUX_SCRIPTDIR/scripts/utils/docker/docker.sh"; docker__create_docker_exec_pid_file
+source "$TERMUX_SCRIPTDIR/scripts/utils/docker/docker.sh"
+docker__create_docker_exec_pid_file
 
 # Functions for working with packages
 source "$TERMUX_SCRIPTDIR/scripts/utils/package/package.sh"
@@ -372,8 +373,8 @@ if [ "$TERMUX_ON_DEVICE_BUILD" = "true" ]; then
 	# For on device builds cross compiling is not supported.
 	# Target architecture must be same as for environment used currently.
 	case "$TERMUX_APP_PACKAGE_MANAGER" in
-		"apt") TERMUX_ARCH=$(dpkg --print-architecture);;
-		"pacman") TERMUX_ARCH=$(pacman-conf Architecture);;
+	"apt") TERMUX_ARCH=$(dpkg --print-architecture) ;;
+	"pacman") TERMUX_ARCH=$(pacman-conf Architecture) ;;
 	esac
 	export TERMUX_ARCH
 fi
@@ -388,7 +389,7 @@ termux_check_package_in_built_packages_list() {
 # Adds a package to the list of built packages if it is not in the list
 termux_add_package_to_built_packages_list() {
 	if ! termux_check_package_in_built_packages_list "$1"; then
-		echo -n "$1 " >> $TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH
+		echo -n "$1 " >>$TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH
 	fi
 }
 
@@ -433,84 +434,87 @@ declare -a PACKAGE_LIST=()
 if [ "$#" -lt 1 ]; then _show_usage; fi
 while (($# >= 1)); do
 	case "$1" in
-		--) shift 1; break;;
-		-h|--help) _show_usage;;
-		--format)
-			if [ $# -ge 2 ]; then
-				shift 1
-				if [ -z "$1" ]; then
-					termux_error_exit "./build-package.sh: argument to '--format' should not be empty"
-				fi
-				export TERMUX_PACKAGE_FORMAT="$1"
-			else
-				termux_error_exit "./build-package.sh: option '--format' requires an argument"
+	--)
+		shift 1
+		break
+		;;
+	-h | --help) _show_usage ;;
+	--format)
+		if [ $# -ge 2 ]; then
+			shift 1
+			if [ -z "$1" ]; then
+				termux_error_exit "./build-package.sh: argument to '--format' should not be empty"
 			fi
-			;;
-		--library)
-			if [ $# -ge 2 ]; then
-				shift
-				if [ -z "$1" ]; then
-					termux_error_exit "./build-package.sh: argument to '--library' should not be empty"
-				fi
-				export TERMUX_PACKAGE_LIBRARY="$1"
-			else
-				termux_error_exit "./build-package.sh: option '--library' requires an argument"
+			export TERMUX_PACKAGE_FORMAT="$1"
+		else
+			termux_error_exit "./build-package.sh: option '--format' requires an argument"
+		fi
+		;;
+	--library)
+		if [ $# -ge 2 ]; then
+			shift
+			if [ -z "$1" ]; then
+				termux_error_exit "./build-package.sh: argument to '--library' should not be empty"
 			fi
-			;;
-		-a)
-			if [ $# -ge 2 ]; then
-				shift 1
-				if [ -z "$1" ]; then
-					termux_error_exit "Argument to '-a' should not be empty."
-				fi
-				if [ "$TERMUX_ON_DEVICE_BUILD" = "true" ]; then
-					termux_error_exit "./build-package.sh: option '-a' is not available for on-device builds"
-				else
-					export TERMUX_ARCH="$1"
-				fi
-			else
-				termux_error_exit "./build-package.sh: option '-a' requires an argument"
+			export TERMUX_PACKAGE_LIBRARY="$1"
+		else
+			termux_error_exit "./build-package.sh: option '--library' requires an argument"
+		fi
+		;;
+	-a)
+		if [ $# -ge 2 ]; then
+			shift 1
+			if [ -z "$1" ]; then
+				termux_error_exit "Argument to '-a' should not be empty."
 			fi
-			;;
-		-d) export TERMUX_DEBUG_BUILD=true;;
-		-D) TERMUX_IS_DISABLED=true;;
-		-f) TERMUX_FORCE_BUILD=true;;
-		-F) TERMUX_FORCE_BUILD_DEPENDENCIES=true && TERMUX_FORCE_BUILD=true;;
-		-i)
 			if [ "$TERMUX_ON_DEVICE_BUILD" = "true" ]; then
-				termux_error_exit "./build-package.sh: option '-i' is not available for on-device builds"
-			elif [ "$TERMUX_PREFIX" != "/data/data/com.termux/files/usr" ]; then
-				termux_error_exit "./build-package.sh: option '-i' is available only when TERMUX_APP_PACKAGE is 'com.termux'"
+				termux_error_exit "./build-package.sh: option '-a' is not available for on-device builds"
 			else
-				export TERMUX_INSTALL_DEPS=true
+				export TERMUX_ARCH="$1"
 			fi
-			;;
-		-I)
-			if [ "$TERMUX_PREFIX" != "/data/data/com.termux/files/usr" ]; then
-				termux_error_exit "./build-package.sh: option '-I' is available only when TERMUX_APP_PACKAGE is 'com.termux'"
-			else
-				export TERMUX_INSTALL_DEPS=true
-				export TERMUX_NO_CLEAN=true
+		else
+			termux_error_exit "./build-package.sh: option '-a' requires an argument"
+		fi
+		;;
+	-d) export TERMUX_DEBUG_BUILD=true ;;
+	-D) TERMUX_IS_DISABLED=true ;;
+	-f) TERMUX_FORCE_BUILD=true ;;
+	-F) TERMUX_FORCE_BUILD_DEPENDENCIES=true && TERMUX_FORCE_BUILD=true ;;
+	-i)
+		if [ "$TERMUX_ON_DEVICE_BUILD" = "true" ]; then
+			termux_error_exit "./build-package.sh: option '-i' is not available for on-device builds"
+		elif [ "$TERMUX_PREFIX" != "/data/data/com.termux/files/usr" ]; then
+			termux_error_exit "./build-package.sh: option '-i' is available only when TERMUX_APP_PACKAGE is 'com.termux'"
+		else
+			export TERMUX_INSTALL_DEPS=true
+		fi
+		;;
+	-I)
+		if [ "$TERMUX_PREFIX" != "/data/data/com.termux/files/usr" ]; then
+			termux_error_exit "./build-package.sh: option '-I' is available only when TERMUX_APP_PACKAGE is 'com.termux'"
+		else
+			export TERMUX_INSTALL_DEPS=true
+			export TERMUX_NO_CLEAN=true
+		fi
+		;;
+	-L) export TERMUX_GLOBAL_LIBRARY=true ;;
+	-q) export TERMUX_QUIET_BUILD=true ;;
+	-w) export TERMUX_WITHOUT_DEPVERSION_BINDING=true ;;
+	-s) export TERMUX_SKIP_DEPCHECK=true ;;
+	-o)
+		if [ $# -ge 2 ]; then
+			shift 1
+			if [ -z "$1" ]; then
+				termux_error_exit "./build-package.sh: argument to '-o' should not be empty"
 			fi
-			;;
-		-L) export TERMUX_GLOBAL_LIBRARY=true;;
-		-q) export TERMUX_QUIET_BUILD=true;;
-		-w) export TERMUX_WITHOUT_DEPVERSION_BINDING=true;;
-		-s) export TERMUX_SKIP_DEPCHECK=true;;
-		-o)
-			if [ $# -ge 2 ]; then
-				shift 1
-				if [ -z "$1" ]; then
-					termux_error_exit "./build-package.sh: argument to '-o' should not be empty"
-				fi
-				TERMUX_OUTPUT_DIR=$(realpath -m "$1")
-			else
-				termux_error_exit "./build-package.sh: option '-o' requires an argument"
-			fi
-			;;
-		-c) TERMUX_CONTINUE_BUILD=true;;
-		-*) termux_error_exit "./build-package.sh: illegal option '$1'";;
-		*) PACKAGE_LIST+=("$1");;
+			TERMUX_OUTPUT_DIR=$(realpath -m "$1")
+		else
+			termux_error_exit "./build-package.sh: option '-o' requires an argument"
+		fi
+		;;
+	-c) TERMUX_CONTINUE_BUILD=true ;;
+	-*) termux_error_exit "./build-package.sh: illegal option '$1'" ;;
+	*) PACKAGE_LIST+=("$1") ;;
 	esac
 	shift 1
 done
@@ -529,36 +533,41 @@ fi
 
 if [ -n "${TERMUX_PACKAGE_FORMAT-}" ]; then
 	case "${TERMUX_PACKAGE_FORMAT-}" in
-		debian|pacman) :;;
-		*) termux_error_exit "Unsupported package format \"${TERMUX_PACKAGE_FORMAT-}\". Only 'debian' and 'pacman' formats are supported";;
+	debian | pacman) : ;;
+	*) termux_error_exit "Unsupported package format \"${TERMUX_PACKAGE_FORMAT-}\". Only 'debian' and 'pacman' formats are supported" ;;
 	esac
 fi
 
 if [ -n "${TERMUX_PACKAGE_LIBRARY-}" ]; then
 	case "${TERMUX_PACKAGE_LIBRARY-}" in
-		bionic|glibc) :;;
-		*) termux_error_exit "Unsupported library \"${TERMUX_PACKAGE_LIBRARY-}\". Only 'bionic' and 'glibc' library are supported";;
+	bionic | glibc) : ;;
+	*) termux_error_exit "Unsupported library \"${TERMUX_PACKAGE_LIBRARY-}\". Only 'bionic' and 'glibc' library are supported" ;;
 	esac
 fi
 
 if [ "${TERMUX_INSTALL_DEPS-false}" = "true" ] || [ "${TERMUX_PACKAGE_LIBRARY-bionic}" = "glibc" ]; then
 	# Setup PGP keys for verifying integrity of dependencies.
 	# Keys are obtained from our keyring package.
-	gpg --list-keys 2C7F29AE97891F6419A9E2CDB0076E490B71616B > /dev/null 2>&1 || {
+	GPG_TTY=$(tty)
+	export GPG_TTY
+	gpg --list-keys 2C7F29AE97891F6419A9E2CDB0076E490B71616B || {
+		rm -f ~/.gnupg/common.conf
+		rm -f ~/.gnupg/S.keyboxd
 		gpg --import "$TERMUX_SCRIPTDIR/packages/termux-keyring/grimler.gpg"
-		gpg --no-tty --command-file <(echo -e "trust\n5\ny")  --edit-key 2C7F29AE97891F6419A9E2CDB0076E490B71616B
+		gpg --no-tty --command-file <(echo -e "trust\n5\ny") --edit-key 2C7F29AE97891F6419A9E2CDB0076E490B71616B
 	}
-	gpg --list-keys CC72CF8BA7DBFA0182877D045A897D96E57CF20C > /dev/null 2>&1 || {
+	exit 69
+	gpg --list-keys CC72CF8BA7DBFA0182877D045A897D96E57CF20C >/dev/null 2>&1 || {
 		gpg --import "$TERMUX_SCRIPTDIR/packages/termux-keyring/termux-autobuilds.gpg"
-		gpg --no-tty --command-file <(echo -e "trust\n5\ny")  --edit-key CC72CF8BA7DBFA0182877D045A897D96E57CF20C
+		gpg --no-tty --command-file <(echo -e "trust\n5\ny") --edit-key CC72CF8BA7DBFA0182877D045A897D96E57CF20C
 	}
-	gpg --list-keys 998DE27318E867EA976BA877389CEED64573DFCA > /dev/null 2>&1 || {
+	gpg --list-keys 998DE27318E867EA976BA877389CEED64573DFCA >/dev/null 2>&1 || {
 		gpg --import "$TERMUX_SCRIPTDIR/packages/termux-keyring/termux-pacman.gpg"
-		gpg --no-tty --command-file <(echo -e "trust\n5\ny")  --edit-key 998DE27318E867EA976BA877389CEED64573DFCA
+		gpg --no-tty --command-file <(echo -e "trust\n5\ny") --edit-key 998DE27318E867EA976BA877389CEED64573DFCA
 	}
 fi
 
-for ((i=0; i<${#PACKAGE_LIST[@]}; i++)); do
+for ((i = 0; i < ${#PACKAGE_LIST[@]}; i++)); do
 	# Following commands must be executed under lock to prevent running
 	# multiple instances of "./build-package.sh".
 	#
@@ -620,7 +629,7 @@ for ((i=0; i<${#PACKAGE_LIST[@]}; i++)); do
 		termux_step_start_build
 
 		if ! termux_check_package_in_building_packages_list "${TERMUX_PKG_BUILDER_DIR#${TERMUX_SCRIPTDIR}/}"; then
-			echo "${TERMUX_PKG_BUILDER_DIR#${TERMUX_SCRIPTDIR}/}" >> $TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH
+			echo "${TERMUX_PKG_BUILDER_DIR#${TERMUX_SCRIPTDIR}/}" >>$TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH
 		fi
 
 		if [ "$TERMUX_CONTINUE_BUILD" == "false" ]; then
@@ -687,7 +696,7 @@ for ((i=0; i<${#PACKAGE_LIST[@]}; i++)); do
 		fi
 		termux_add_package_to_built_packages_list "$TERMUX_PKG_NAME"
 		termux_step_finish_build
-	) 5< "$TERMUX_BUILD_LOCK_FILE"
+	) 5<"$TERMUX_BUILD_LOCK_FILE"
 done
 
 # Removing a file to store a list of compiled packages
@@ -695,3 +704,5 @@ if [ "$TERMUX_BUILD_PACKAGE_CALL_DEPTH" = "0" ]; then
 	rm "$TERMUX_BUILD_PACKAGE_CALL_BUILT_PACKAGES_LIST_FILE_PATH"
 	rm "$TERMUX_BUILD_PACKAGE_CALL_BUILDING_PACKAGES_LIST_FILE_PATH"
 fi
+
+set +x
